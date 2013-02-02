@@ -1,5 +1,5 @@
-$ git clone git://git.qtquick.me/qmlplugins/fluentd.git
-$ cd fluentd
+$ git clone git://git.qtquick.me/qmlplugins/database.git
+$ cd database
 $ qmake
 $ make
 $ (sudo) make install
