@@ -442,13 +442,13 @@ void TableModel::update(const QVariantMap &data)
                 keyRole = i;
                 key = value;
                 where = QString(" WHERE %1=?").arg(field);
-                values.append(value);
             } else {
                 sets.append(QString("%1=?").arg(field));
                 values.append(value);
             }
         }
     }
+    values.append(key);
 
     QSqlDatabase db = QSqlDatabase::database(m_database->connectionName());
     QSqlQuery query(db);
@@ -459,9 +459,12 @@ void TableModel::update(const QVariantMap &data)
     foreach (const QVariant &value, values) {
         query.addBindValue(value);
     }
-    qDebug() << query.boundValues();
 
-    if (query.exec()) {
+    if (!query.exec()) {
+        qWarning() << Q_FUNC_INFO << __LINE__ << query.lastError();
+        qWarning() << Q_FUNC_INFO << __LINE__ << query.lastQuery();
+        qWarning() << Q_FUNC_INFO << __LINE__ << query.boundValues();
+    } else {
         for (int i = 0; i < d->data.count(); i++) {
             if (d->data.at(i).at(keyRole - Qt::UserRole) == key) {
                 QVariantList newData = d->data.at(i);
