@@ -1,4 +1,2 @@
-TEMPLATE = subdirs
-SUBDIRS = src
-
+load(qt_parts)
 OTHER_FILES += LICENSE README
