@@ -42,7 +42,6 @@ class SqlModel::Private : public QObject
     Q_OBJECT
 public:
     Private(SqlModel *parent);
-    ~Private();
     void init();
 
     QString selectSql() const;
@@ -64,19 +63,17 @@ SqlModel::Private::Private(SqlModel *parent)
     : QObject(parent)
     , q(parent)
 {
-    connect(q, SIGNAL(databaseChanged(Database*)), this, SLOT(databaseChanged(Database*)));
-    connect(q, SIGNAL(selectChanged(bool)), this, SLOT(select()));
-}
-
-SqlModel::Private::~Private()
-{
 }
 
 void SqlModel::Private::init()
 {
+    connect(q, SIGNAL(databaseChanged(Database*)), this, SLOT(databaseChanged(Database*)));
+    connect(q, SIGNAL(selectChanged(bool)), this, SLOT(select()));
     if (!q->m_database) {
         q->database(qobject_cast<Database *>(q->QObject::parent()));
     }
+
+    select();
 }
 
 void SqlModel::Private::databaseChanged(Database *database)
