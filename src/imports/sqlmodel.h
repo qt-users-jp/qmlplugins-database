@@ -40,13 +40,17 @@ class SqlModel : public QAbstractListModel, public QQmlParserStatus
     Q_PROPERTY(Database *database READ database WRITE database NOTIFY databaseChanged)
     Q_PROPERTY(QString query READ query WRITE query NOTIFY queryChanged)
     Q_PROPERTY(QVariantList params READ params WRITE params NOTIFY paramsChanged)
+    Q_PROPERTY(int timer READ timer NOTIFY timerChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool select READ select WRITE select NOTIFY selectChanged)
+    Q_PROPERTY(bool async READ async WRITE async NOTIFY asyncChanged)
 
     Q_INTERFACES(QQmlParserStatus)
 public:
     explicit SqlModel(QObject *parent = 0);
+    ~SqlModel();
 
+    int timer() const;
     int count() const;
     Q_INVOKABLE QVariantMap get(int index) const;
 
@@ -61,8 +65,13 @@ signals:
     void databaseChanged(Database *database);
     void queryChanged(const QString &query);
     void paramsChanged(const QVariantList &params);
+    void timerChanged(int timer);
     void countChanged(int count);
     void selectChanged(bool select);
+    void asyncChanged(bool async);
+
+private slots:
+    void updated();
 
 private:
     class Private;
@@ -83,6 +92,7 @@ private: \
     ADD_PROPERTY(const QString &, query, QString)
     ADD_PROPERTY(const QVariantList &, params, QVariantList)
     ADD_PROPERTY(bool, select, bool)
+    ADD_PROPERTY(bool, async, bool)
 
 #undef ADD_PROPERTY
 };

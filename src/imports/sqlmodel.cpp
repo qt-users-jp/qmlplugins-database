@@ -31,11 +31,19 @@
 #include <QtCore/QMetaObject>
 #include <QtCore/QMetaProperty>
 #include <QtCore/QStringList>
+#include <QtCore/QTime>
+#include <QtCore/QThread>
+#include <QtCore/QReadWriteLock>
+#include <QtCore/QReadLocker>
+#include <QtCore/QWriteLocker>
+
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlDriver>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlRecord>
 #include <QtSql/QSqlQuery>
+
+#define DEBUG() qDebug() << Q_FUNC_INFO << __LINE__
 
 class SqlModel::Private : public QObject
 {
@@ -46,6 +54,10 @@ public:
 
     QString selectSql() const;
 
+signals:
+    void updated();
+    void timerChanged(int timer);
+
 private slots:
     void databaseChanged(Database *database);
     void openChanged(bool open);
@@ -55,25 +67,50 @@ private:
     SqlModel *q;
 
 public:
-    QList<QVariantList> data;
+    QThread *thread;
+    QReadWriteLock lock;
+    QSqlQuery query;
     QHash<int, QByteArray> roleNames;
+    bool quit;
+    int timer;
+    int count;
 };
 
 SqlModel::Private::Private(SqlModel *parent)
     : QObject(parent)
     , q(parent)
+    , thread(0)
+    , quit(false)
+    , timer(0)
+    , count(0)
 {
 }
 
 void SqlModel::Private::init()
 {
-    connect(q, SIGNAL(databaseChanged(Database*)), this, SLOT(databaseChanged(Database*)));
-    connect(q, SIGNAL(selectChanged(bool)), this, SLOT(select()));
+    Qt::ConnectionType type = Qt::DirectConnection;
+    if (q->m_async) {
+        thread = new QThread(q);
+        // TODO
+//        connect(thread, &QThread::destroyed, [&](QObject *object) {
+//        });
+        this->setParent(0);
+        this->moveToThread(thread);
+        thread->start();
+        type = Qt::QueuedConnection;
+    }
+
+    connect(q, SIGNAL(databaseChanged(Database*)), this, SLOT(databaseChanged(Database*)), type);
+    connect(q, SIGNAL(selectChanged(bool)), this, SLOT(select()), type);
+    connect(q, SIGNAL(queryChanged(QString)), this, SLOT(select()), type);
+    connect(q, SIGNAL(paramsChanged(QVariantList)), this, SLOT(select()), type);
+    connect(this, SIGNAL(updated()), q, SLOT(updated()), type);
+    connect(this, SIGNAL(timerChanged(int)), q, SIGNAL(timerChanged(int)), type);
+
     if (!q->m_database) {
         q->database(qobject_cast<Database *>(q->QObject::parent()));
     }
-
-    select();
+    QMetaObject::invokeMethod(this, "select", type);
 }
 
 void SqlModel::Private::databaseChanged(Database *database)
@@ -101,44 +138,34 @@ void SqlModel::Private::select()
     if (!q->m_select) return;
     if (!q->m_database || !q->m_database->open()) return;
 
-    QSqlDatabase db = QSqlDatabase::database(q->m_database->connectionName());
-
-    if (!data.isEmpty()) {
-        q->beginRemoveRows(QModelIndex(), 0, data.count() - 1);
-        data.clear();
-        q->endRemoveRows();
-        emit q->countChanged(data.count());
+    if (query.isActive()) {
+        query.finish();
     }
 
-    QSqlQuery query(db);
+    QSqlDatabase db = QSqlDatabase::database(q->m_database->connectionName());
+
+    query = QSqlQuery(db);
     query.prepare(q->m_query);
     foreach (const QVariant &param, q->m_params) {
         query.addBindValue(param);
     }
 
+    QTime time;
+    time.start();
     if (!query.exec()) {
         qDebug() << Q_FUNC_INFO << __LINE__ << query.lastQuery() << query.boundValues() << query.lastError();
         return;
     }
+    timer = time.elapsed();
+    emit timerChanged(timer);
+
     QSqlRecord record = query.record();
 
     for (int i = 0; i < record.count(); i++) {
         roleNames.insert(Qt::UserRole + i, record.fieldName(i).toUtf8());
     }
 
-    while (query.next()) {
-        QVariantList d;
-        for (int i = 0; i < roleNames.keys().count(); i++) {
-            d.append(query.value(i));
-        }
-        data.append(d);
-    }
-
-    if (!data.isEmpty()) {
-        q->beginInsertRows(QModelIndex(), 0, data.count() - 1);
-        q->endInsertRows();
-        emit q->countChanged(data.count());
-    }
+    emit updated();
 }
 
 SqlModel::SqlModel(QObject *parent)
@@ -146,12 +173,65 @@ SqlModel::SqlModel(QObject *parent)
     , d(new Private(this))
     , m_database(0)
     , m_select(true)
+    , m_async(false)
 {
+}
+
+SqlModel::~SqlModel()
+{
+    if (m_async) {
+        d->lock.lockForWrite();
+        d->quit = true;
+        d->lock.unlock();
+        d->thread->quit();
+        d->thread->wait();
+        delete d->thread;
+        delete d;
+    }
+}
+
+void SqlModel::updated()
+{
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    if (d->count > 0) {
+        beginRemoveRows(QModelIndex(), 0, d->count - 1);
+        endRemoveRows();
+    }
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
+//    DEBUG() << "locking write";
+    if (m_async) d->lock.lockForWrite();
+//    DEBUG() << "locked";
+
+    d->count = d->query.size();
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    if (d->count > 0) {
+        beginInsertRows(QModelIndex(), 0, d->count - 1);
+        endInsertRows();
+    }
+
+    emit countChanged(d->count);
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
 }
 
 void SqlModel::classBegin()
 {
-
 }
 
 void SqlModel::componentComplete()
@@ -161,20 +241,72 @@ void SqlModel::componentComplete()
 
 QHash<int, QByteArray> SqlModel::roleNames() const
 {
-    return d->roleNames;
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    QHash<int, QByteArray> ret = d->roleNames;
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
+    return ret;
 }
 
 int SqlModel::rowCount(const QModelIndex &parent) const
 {
-    return d->data.count();
+    Q_UNUSED(parent)
+//    DEBUG() << QThread::currentThread() << thread() << d->thread;
+
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    int ret = d->count;
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
+//    DEBUG() << ret;
+//    DEBUG() << QThread::currentThread() << thread();
+    return ret;
 }
 
 QVariant SqlModel::data(const QModelIndex &index, int role) const
 {
+    QVariant ret;
     if (role >= Qt::UserRole) {
-        return d->data.at(index.row()).at(role - Qt::UserRole);
+//        DEBUG() << "locking read";
+        if (m_async) d->lock.lockForRead();
+//        DEBUG() << "locked";
+
+        if (d->query.seek(index.row())) {
+            ret = d->query.value(role - Qt::UserRole);
+        }
+
+//        DEBUG() << "unlocking";
+        if (m_async) d->lock.unlock();
+//        DEBUG() << "unlocked";
     }
-    return QVariant();
+    return ret;
+}
+
+int SqlModel::timer() const
+{
+    int ret = 0;
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    ret = d->timer;
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
+    return ret;
 }
 
 int SqlModel::count() const
@@ -185,11 +317,21 @@ int SqlModel::count() const
 QVariantMap SqlModel::get(int index) const
 {
     QVariantMap ret;
-    QVariantList list = d->data.at(index);
-    for (int i = 0; i < list.length(); i++) {
-//        qDebug() << Q_FUNC_INFO << __LINE__ << i << QString::fromUtf8(d->roleNames.value(Qt::UserRole + i)) << list.at(i);
-        ret.insert(QString::fromUtf8(d->roleNames.value(Qt::UserRole + i)), list.at(i));
+
+//    DEBUG() << "locking read";
+    if (m_async) d->lock.lockForRead();
+//    DEBUG() << "locked";
+
+    if (d->query.seek(index)) {
+        for (int i = 0; i < d->roleNames.keys().length(); i++) {
+            ret.insert(QString::fromUtf8(d->roleNames.value(Qt::UserRole + i)), d->query.value(i));
+        }
     }
+
+//    DEBUG() << "unlocking";
+    if (m_async) d->lock.unlock();
+//    DEBUG() << "unlocked";
+
     return ret;
 }
 
