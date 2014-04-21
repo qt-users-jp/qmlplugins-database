@@ -104,14 +104,22 @@ void TableModel::Private::init()
         int j = 0;
         for (int i = initialProperties.count(); i < mo->propertyCount(); i++) {
             QMetaProperty property = mo->property(i);
-            roleNames.insert(Qt::UserRole + j, QByteArray(property.name()));
-            fieldNames.append(property.name());
+            QByteArray propertyName(property.name());
+            if (propertyName.startsWith('_')) {
+                propertyName.remove(0, 1);
+                if (propertyName.startsWith('_')) {
+                    // __name should be used for private properties
+                    continue;
+                }
+            }
+            roleNames.insert(Qt::UserRole + j, propertyName);
+            fieldNames.append(propertyName);
             switch (property.type()) {
             case QVariant::Int:
-                name2type.insert(QByteArray(property.name()), QVariant::LongLong);
+                name2type.insert(propertyName, QVariant::LongLong);
                 break;
             default:
-                name2type.insert(QByteArray(property.name()), property.type());
+                name2type.insert(propertyName, property.type());
                 break;
             }
 
@@ -159,11 +167,19 @@ void TableModel::Private::create()
     int start = initialProperties.count();
     for (int i = start; i < mo->propertyCount(); i++) {
         QMetaProperty property = mo->property(i);
+        QString propertyName = QString::fromUtf8(property.name());
+        if (propertyName.startsWith('_')) {
+            propertyName.remove(0, 1);
+            if (propertyName.startsWith('_')) {
+                // __name should be used for private properties
+                continue;
+            }
+        }
         if (i > start)
             sql.append(QLatin1String(", "));
-        sql.append(property.name());
+        sql.append(propertyName);
 
-        bool isPrimaryKey = (q->m_primaryKey == QString(property.name()));
+        bool isPrimaryKey = (q->m_primaryKey == propertyName);
 
         switch (property.type()) {
         case QVariant::Int:
