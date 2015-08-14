@@ -82,6 +82,7 @@ bool Database::open()
             db.setDatabaseName(m_databaseName);
             db.setUserName(m_userName);
             db.setPassword(m_password);
+            db.setConnectOptions(m_connectOptions);
             if (db.open()) {
                 open(true);
             } else {

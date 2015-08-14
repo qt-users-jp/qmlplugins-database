@@ -37,6 +37,7 @@ Item {
         connectionName: 'examples/database.qml'
         type: "QSQLITE"
         databaseName: ":memory:"
+        connectOptions: "QSQLITE_BUSY_TIMEOUT=100"
 
         TableModel {
             id: table

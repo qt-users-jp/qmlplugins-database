@@ -45,6 +45,7 @@ class Database : public QObject
     Q_PROPERTY(QString hostName READ hostName WRITE hostName NOTIFY hostNameChanged)
     Q_PROPERTY(QString userName READ userName WRITE userName NOTIFY userNameChanged)
     Q_PROPERTY(QString password READ password WRITE password NOTIFY passwordChanged)
+    Q_PROPERTY(QString connectOptions READ connectOptions WRITE connectOptions NOTIFY connectOptionsChanged)
 
     Q_PROPERTY(bool open READ isOpen NOTIFY openChanged)
 public:
@@ -69,6 +70,7 @@ signals:
     void hostNameChanged(const QString &hostName);
     void userNameChanged(const QString &userName);
     void passwordChanged(const QString &password);
+    void connectOptionsChanged(const QString &connectOptions);
     void openChanged(bool open);
     void transactionChanged(bool transaction);
 
@@ -94,6 +96,7 @@ private: \
     ADD_PROPERTY(const QString &, hostName, QString)
     ADD_PROPERTY(const QString &, userName, QString)
     ADD_PROPERTY(const QString &, password, QString)
+    ADD_PROPERTY(const QString &, connectOptions, QString)
 #undef ADD_PROPERTY
 
     class Private;
