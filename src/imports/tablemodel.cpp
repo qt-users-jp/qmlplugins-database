@@ -283,8 +283,9 @@ void TableModel::Private::select()
         QVariantList d;
         for (int i = 0; i < roleNames.keys().count(); i++) {
             QVariant v = query.value(i);
-            if (v.type() != name2type.value(roleNames.value(i + Qt::UserRole))) {
-                v.convert(name2type.value(roleNames.value(i + Qt::UserRole)));
+            QByteArray roleName = roleNames.value(i + Qt::UserRole);
+            if (name2type.contains(roleName) && v.type() != name2type.value(roleName)) {
+                v.convert(name2type.value(roleName));
             }
             d.append(v);
         }
@@ -408,13 +409,13 @@ QVariant TableModel::insert(const QVariantMap &data)
     if (query.exec()) {
         QString condition;
         QVariantList params;
-        if (db.driverName() == QLatin1String("QPSQL")) {
-            condition = QLatin1String("oid=?");
-            params.append(query.lastInsertId().toInt());
-        } else {
+//        if (db.driverName() == QLatin1String("QPSQL")) {
+//            condition = QLatin1String("oid=?");
+//            params.append(query.lastInsertId().toInt());
+//        } else {
             condition = QString("%1=?").arg(m_primaryKey);
-            params.append(query.lastInsertId().toInt());
-        }
+            params.append(query.lastInsertId());
+//        }
 
 //        qDebug() << Q_FUNC_INFO << __LINE__ << sql << query.lastInsertId() << db.driver()->hasFeature(QSqlDriver::LastInsertId);
         QSqlQuery query2 = d->buildQuery(condition, params);
