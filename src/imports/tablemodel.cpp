@@ -541,4 +541,25 @@ bool TableModel::remove(const QVariantMap &data)
     return ret;
 }
 
+int TableModel::remove()
+{
+    int ret = -1;
+    QSqlDatabase db = QSqlDatabase::database(m_database->connectionName());
+
+    QSqlQuery query(db);
+    QString sql = QString("DELETE FROM %1").arg(tableName());
+    if (!m_condition.isEmpty())
+        sql += QString(" WHERE %1").arg(m_condition);
+    query.prepare(sql);
+    foreach (const QVariant &val, m_params) {
+        query.addBindValue(val);
+    }
+    if (query.exec()) {
+        ret = query.numRowsAffected();
+    } else {
+        qWarning() << Q_FUNC_INFO << __LINE__ << sql << query.lastError().text();
+    }
+    return ret;
+}
+
 #include "tablemodel.moc"

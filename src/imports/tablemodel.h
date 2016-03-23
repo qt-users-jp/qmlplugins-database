@@ -57,6 +57,7 @@ public:
     Q_INVOKABLE QVariant insert(const QVariantMap &data);
     Q_INVOKABLE void update(const QVariantMap &data);
     Q_INVOKABLE bool remove(const QVariantMap &data);
+    Q_INVOKABLE int remove();
 //    void clear();
 
     virtual int rowCount(const QModelIndex &parent = QModelIndex()) const;
