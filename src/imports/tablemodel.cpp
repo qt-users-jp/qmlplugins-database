@@ -407,34 +407,31 @@ QVariant TableModel::insert(const QVariantMap &data)
     }
 
     if (query.exec()) {
-        QString condition;
-        QVariantList params;
-//        if (db.driverName() == QLatin1String("QPSQL")) {
-//            condition = QLatin1String("oid=?");
-//            params.append(query.lastInsertId().toInt());
-//        } else {
+        if (!m_primaryKey.isEmpty()) {
+            QString condition;
+            QVariantList params;
             condition = QString("%1=?").arg(m_primaryKey);
             params.append(query.lastInsertId());
-//        }
 
-//        qDebug() << Q_FUNC_INFO << __LINE__ << sql << query.lastInsertId() << db.driver()->hasFeature(QSqlDriver::LastInsertId);
-        QSqlQuery query2 = d->buildQuery(condition, params);
-        if (query2.first()) {
-            int row = rowCount();
-            beginInsertRows(QModelIndex(), row, row);
-            QVariantList v;
-            for (int i = 0; i < d->roleNames.keys().count(); i++) {
-//                qDebug() << Q_FUNC_INFO << __LINE__ << i << d->roleNames.value(Qt::UserRole + i) << d->primaryKey;
-                if (d->roleNames.value(Qt::UserRole + i) == m_primaryKey) {
-                    ret = query2.value(i);
+//            qDebug() << Q_FUNC_INFO << __LINE__ << sql << query.lastInsertId() << db.driver()->hasFeature(QSqlDriver::LastInsertId);
+            QSqlQuery query2 = d->buildQuery(condition, params);
+            if (query2.first()) {
+                int row = rowCount();
+                beginInsertRows(QModelIndex(), row, row);
+                QVariantList v;
+                for (int i = 0; i < d->roleNames.keys().count(); i++) {
+//                    qDebug() << Q_FUNC_INFO << __LINE__ << i << d->roleNames.value(Qt::UserRole + i) << d->primaryKey;
+                    if (d->roleNames.value(Qt::UserRole + i) == m_primaryKey) {
+                        ret = query2.value(i);
+                    }
+                    v.append(query2.value(i));
                 }
-                v.append(query2.value(i));
+                d->data.append(v);
+                endInsertRows();
+                emit countChanged(d->data.count());
+            } else {
+                qWarning() << Q_FUNC_INFO << __LINE__ << query2.lastError().text() << query2.lastQuery() << query2.boundValues();
             }
-            d->data.append(v);
-            endInsertRows();
-            emit countChanged(d->data.count());
-        } else {
-            qDebug() << Q_FUNC_INFO << __LINE__ << query2.lastError().text() << query2.lastQuery() << query2.boundValues();
         }
     } else {
         qWarning() << Q_FUNC_INFO << __LINE__ << query.lastQuery() << query.boundValues() << query.lastError().text();
