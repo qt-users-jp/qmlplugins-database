@@ -154,6 +154,7 @@ void SqlModel::Private::select()
     time.start();
     if (!query.exec()) {
         qDebug() << Q_FUNC_INFO << __LINE__ << query.lastQuery() << query.boundValues() << query.lastError();
+        updated();
         return;
     }
     timer = time.elapsed();
@@ -208,7 +209,10 @@ void SqlModel::updated()
     if (m_async) d->lock.lockForWrite();
 //    DEBUG() << "locked";
 
-    d->count = d->query.size();
+    if (d->query.isActive())
+        d->count = d->query.size();
+    else
+        d->count = 0;
 
 //    DEBUG() << "unlocking";
     if (m_async) d->lock.unlock();
